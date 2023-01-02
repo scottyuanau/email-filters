@@ -12,47 +12,44 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from openpyxl.reader.excel import ExcelReader
+from openpyxl.xml import constants as openpyxl_xml_constants
+from pandas import ExcelFile
+from pandas.io.excel._openpyxl import OpenpyxlReader
+
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/gmail.settings.basic']
 blacklist = '/Users/scott/Library/CloudStorage/OneDrive-Personal/email-blacklist.xlsx'
 
-# def blockemailmaster():
-#     """Shows basic usage of the Gmail API.
-#     Lists the user's Gmail labels.
-#     """
-#     creds = None
-#     accountname = 'Block Email Account'
-#     # The file token.json stores the user's access and refresh tokens, and is
-#     # created automatically when the authorization flow completes for the first
-#     # time.
-#     path = '/Users/scott/Learning/Coding/Python3/email-filter/credentials/block-email-account'
-#     #modify the path to the correct credential folder
-#     MAILSCOPES = 'https://www.googleapis.com/auth/gmail.modify'
-#     if os.path.exists(f'{path}/token.json'):
-#         creds = Credentials.from_authorized_user_file(f'{path}/token.json', MAILSCOPES)
-#     # If there are no (valid) credentials available, let the user log in.
-#     if not creds or not creds.valid:
-#         if creds and creds.expired and creds.refresh_token:
-#             creds.refresh(Request())
-#         else:
-#             flow = InstalledAppFlow.from_client_secrets_file(
-#                 f'{path}/credentials.json', MAILSCOPES)
-#             creds = flow.run_local_server(port=0)
-#         # Save the credentials for the next run
-#         with open(f'{path}/token.json', 'w') as token:
-#             token.write(creds.to_json())
-#     df = pd.read_excel('email-blacklist.xlsx')
-#
-#     try:
-#         # Call the Gmail API
-#         service = build('gmail', 'v1', credentials=creds)
-#         reademails = service.users().messages().list(userId='me').execute()
-#         print(reademails)
-#
-#
-#
-#     except HttpError as error:
-#         print(f'An error occurred: {error}')
+class OpenpyxlReaderWOFormatting(OpenpyxlReader):
+    """OpenpyxlReader without reading formatting
+    - this will decrease number of errors and speedup process
+    error example https://stackoverflow.com/q/66499849/1731460 """
+
+    def load_workbook(self, filepath_or_buffer):
+        """Same as original but with custom archive reader"""
+        reader = ExcelReader(filepath_or_buffer, read_only=True, data_only=True, keep_links=False)
+        reader.archive.read = self.read_exclude_styles(reader.archive)
+        reader.read()
+        return reader.wb
+
+    def read_exclude_styles(self, archive):
+        """skips addings styles to xlsx workbook , like they were absent
+        see logic in openpyxl.styles.stylesheet.apply_stylesheet """
+
+        orig_read = archive.read
+
+        def new_read(name, pwd=None):
+            if name == openpyxl_xml_constants.ARC_STYLE:
+                raise KeyError
+            else:
+                return orig_read(name, pwd=pwd)
+
+        return new_read
+
+ExcelFile._engines['openpyxl_wo_formatting'] = OpenpyxlReaderWOFormatting
+
+
 def scottpersonal():
     """Shows basic usage of the Gmail API.
     Lists the user's Gmail labels.
@@ -76,7 +73,7 @@ def scottpersonal():
         # Save the credentials for the next run
         with open(f'{path}/token.json', 'w') as token:
             token.write(creds.to_json())
-    df = pd.read_excel(blacklist)
+    df = pd.read_excel(blacklist, engine='openpyxl_wo_formatting')
 
     try:
         # Call the Gmail API
@@ -134,7 +131,7 @@ def roaster():
         # Save the credentials for the next run
         with open(f'{path}/token.json', 'w') as token:
             token.write(creds.to_json())
-    df = pd.read_excel(blacklist)
+    df = pd.read_excel(blacklist, engine='openpyxl_wo_formatting')
 
     try:
         # Call the Gmail API
@@ -194,7 +191,7 @@ def scottwork():
         # Save the credentials for the next run
         with open(f'{path}/token.json', 'w') as token:
             token.write(creds.to_json())
-    df = pd.read_excel(blacklist)
+    df = pd.read_excel(blacklist, engine='openpyxl_wo_formatting')
 
     try:
         # Call the Gmail API
@@ -255,7 +252,7 @@ def cafeaccount():
         # Save the credentials for the next run
         with open(f'{path}/token.json', 'w') as token:
             token.write(creds.to_json())
-    df = pd.read_excel(blacklist)
+    df = pd.read_excel(blacklist, engine='openpyxl_wo_formatting')
 
     try:
         # Call the Gmail API
@@ -292,17 +289,14 @@ def cafeaccount():
         print(f'An error occurred: {error}')
 
 def autojob():
-    # blockemailmaster()
     scottpersonal()
     roaster()
     scottwork()
     cafeaccount()
 
-#auto run the job
-# schedule.every(1).hour.do(autojob)
-
 if __name__ == '__main__':
 #auto run the script
+#     schedule.every(1).hour.do(autojob)
     # while True:
     #     schedule.run_pending()
     #     time.sleep(1)
